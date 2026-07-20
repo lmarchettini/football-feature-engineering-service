@@ -94,6 +94,21 @@ public class PredictionFeature {
 
     @Column(name = "target_over_25")
     private Boolean targetOver25;
+    
+    @Column(name = "target_over_15")
+    private Boolean targetOver15;
+    
+    @Column(name = "target_under_45")
+    private Boolean targetUnder45;
+    
+    @Column(name = "target_double_chance_1x")
+    private Boolean targetDoubleChance1x;
+
+    @Column(name = "target_double_chance_x2")
+    private Boolean targetDoubleChanceX2;
+
+    @Column(name = "target_double_chance_12")
+    private Boolean targetDoubleChance12;
 
     @Column(name = "target_btts")
     private Boolean targetBtts;
@@ -184,4 +199,66 @@ public class PredictionFeature {
 
     @Column(name = "away_away_avg_xga")
     private BigDecimal awayAwayAvgXga;
+    
+    @Column(name = "home_btts_rate_5")
+    private BigDecimal homeBttsRate5;
+
+    @Column(name = "away_btts_rate_5")
+    private BigDecimal awayBttsRate5;
+
+    @Column(name = "home_btts_rate_10")
+    private BigDecimal homeBttsRate10;
+
+    @Column(name = "away_btts_rate_10")
+    private BigDecimal awayBttsRate10;
+
+    @Column(name = "home_over25_rate_5")
+    private BigDecimal homeOver25Rate5;
+
+    @Column(name = "away_over25_rate_5")
+    private BigDecimal awayOver25Rate5;
+
+    @Column(name = "home_over25_rate_10")
+    private BigDecimal homeOver25Rate10;
+
+    @Column(name = "away_over25_rate_10")
+    private BigDecimal awayOver25Rate10;
+
+    @Column(name = "combined_avg_xg")
+    private BigDecimal combinedAvgXg;
+
+    @Column(name = "expected_match_goals")
+    private BigDecimal expectedMatchGoals;
+    
+ // ===== V5: DIFFERENCE FEATURES =====
+
+    @Column(name = "form_difference")
+    private BigDecimal formDifference;
+
+    @Column(name = "xg_difference")
+    private BigDecimal xgDifference;
+
+    @Column(name = "xga_difference")
+    private BigDecimal xgaDifference;
+
+    @Column(name = "goals_scored_difference")
+    private BigDecimal goalsScoredDifference;
+
+    @Column(name = "goals_conceded_difference")
+    private BigDecimal goalsConcededDifference;
+
+    @Column(name = "shots_difference")
+    private BigDecimal shotsDifference;
+
+    @Column(name = "shots_on_goal_difference")
+    private BigDecimal shotsOnGoalDifference;
+
+    @Column(name = "possession_difference")
+    private BigDecimal possessionDifference;
+
+    @Column(name = "corners_difference")
+    private BigDecimal cornersDifference;
+
+    @Column(name = "pass_accuracy_difference")
+    private BigDecimal passAccuracyDifference;
 }

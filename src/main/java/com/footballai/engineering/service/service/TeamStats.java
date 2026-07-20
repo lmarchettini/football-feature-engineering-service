@@ -16,7 +16,18 @@ public record TeamStats(
         BigDecimal avgCorners,
         BigDecimal avgShotsInsideBox,
         BigDecimal avgXg,
-        BigDecimal avgXga
-) {
+        BigDecimal avgXga,
 
+        /*
+         * Percentuale di partite in cui entrambe
+         * le squadre hanno segnato.
+         */
+        BigDecimal bttsRate,
+
+        /*
+         * Percentuale di partite terminate
+         * con almeno 3 gol complessivi.
+         */
+        BigDecimal over25Rate
+) {
 }

@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.footballai.engineering.service.entity.Fixture;
 
@@ -14,7 +15,7 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
 	@Query("""
 		    SELECT f
 		    FROM Fixture f
-		    WHERE f.status = 'FT'
+		    WHERE f.status IN ('FT', 'AET', 'PEN', 'AWD')
 		      AND f.homeGoals IS NOT NULL
 		      AND f.awayGoals IS NOT NULL
 		      AND NOT EXISTS (
@@ -30,7 +31,7 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
 	@Query("""
 		    SELECT f
 		    FROM Fixture f
-		    WHERE f.status <> 'FT'
+		    WHERE f.status NOT IN ('FT', 'AET', 'PEN', 'AWD', 'CANC')
 		      AND NOT EXISTS (
 		          SELECT 1
 		          FROM PredictionFeature pf
@@ -45,7 +46,7 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
     @Query("""
         SELECT f
         FROM Fixture f
-        WHERE f.status = 'FT'
+        WHERE f.status IN ('FT', 'AET', 'PEN', 'AWD')
           AND f.date < :beforeDate
           AND (f.homeTeamId = :teamId OR f.awayTeamId = :teamId)
         ORDER BY f.date DESC
@@ -59,7 +60,7 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
     @Query("""
         SELECT f
         FROM Fixture f
-        WHERE f.status = 'FT'
+        WHERE f.status IN ('FT', 'AET', 'PEN', 'AWD')
           AND f.date < :beforeDate
           AND (
               (f.homeTeamId = :homeTeamId AND f.awayTeamId = :awayTeamId)
@@ -78,7 +79,7 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
     @Query("""
     	    SELECT f
     	    FROM Fixture f
-    	    WHERE f.status = 'FT'
+    	    WHERE f.status IN ('FT', 'AET', 'PEN', 'AWD')
     	      AND f.date < :beforeDate
     	      AND f.homeTeamId = :teamId
     	    ORDER BY f.date DESC
@@ -92,7 +93,7 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
     	@Query("""
     	    SELECT f
     	    FROM Fixture f
-    	    WHERE f.status = 'FT'
+    	    WHERE f.status IN ('FT', 'AET', 'PEN', 'AWD')
     	      AND f.date < :beforeDate
     	      AND f.awayTeamId = :teamId
     	    ORDER BY f.date DESC
@@ -102,4 +103,47 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
     	        LocalDateTime beforeDate,
     	        Pageable pageable
     	);
+    	
+    	@Query("""
+    		    SELECT f
+    		    FROM Fixture f
+    		    WHERE f.leagueId = :leagueId
+    		      AND f.season = :season
+    		      AND f.status IN ('FT', 'AET', 'PEN', 'AWD')
+    		      AND f.homeGoals IS NOT NULL
+    		      AND f.awayGoals IS NOT NULL
+    		      AND f.date < :beforeDate
+    		    ORDER BY f.date ASC, f.id ASC
+    		""")
+    		List<Fixture> findCompletedLeagueFixturesBefore(
+    		        Long leagueId,
+    		        Integer season,
+    		        LocalDateTime beforeDate
+    		);
+    	
+    	@Query(
+    		    value = """
+    		        SELECT COUNT(*)
+    		        FROM (
+    		            SELECT home_team_id AS team_id
+    		            FROM fixtures
+    		            WHERE league_id = :leagueId
+    		              AND season = :season
+    		              AND home_team_id IS NOT NULL
+
+    		            UNION
+
+    		            SELECT away_team_id AS team_id
+    		            FROM fixtures
+    		            WHERE league_id = :leagueId
+    		              AND season = :season
+    		              AND away_team_id IS NOT NULL
+    		        ) AS league_teams
+    		        """,
+    		    nativeQuery = true
+    		)
+    		Long countTeams(
+    		        @Param("leagueId") Long leagueId,
+    		        @Param("season") Integer season
+    		);
 }

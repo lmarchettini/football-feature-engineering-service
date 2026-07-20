@@ -1,9 +1,14 @@
 package com.footballai.engineering.service.repository;
 
-import com.footballai.engineering.service.entity.FixtureStatistic;
-import org.springframework.data.jpa.repository.JpaRepository;
-
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.footballai.engineering.service.entity.FixtureStatistic;
 
 public interface FixtureStatisticRepository
         extends JpaRepository<FixtureStatistic, Long> {
@@ -12,4 +17,13 @@ public interface FixtureStatisticRepository
             Long fixtureId,
             Long teamId
     );
+    
+    @Query("""
+    	    SELECT fs
+    	    FROM FixtureStatistic fs
+    	    WHERE fs.fixtureId IN :fixtureIds
+    	""")
+    	List<FixtureStatistic> findByFixtureIdIn(
+    	        @Param("fixtureIds") Collection<Long> fixtureIds
+    	);
 }
