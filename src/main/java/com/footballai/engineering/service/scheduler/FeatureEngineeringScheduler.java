@@ -17,7 +17,7 @@ public class FeatureEngineeringScheduler {
 
     @Scheduled(cron = "${feature-engineering.cron}")
     public void generateFeatures() {
-        log.info("Running feature engineering scheduler");
+        log.debug("Running feature engineering scheduler");
         featureEngineeringService.generateFeatures();
     }
 }

@@ -44,7 +44,7 @@ public class FeatureEngineeringService {
 		List<Fixture> fixtures = fixtureRepository
 				.findFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
 
-		log.info("Found {} trainable fixtures", fixtures.size());
+		log.debug("Found {} trainable fixtures", fixtures.size());
 
 		for (Fixture fixture : fixtures) {
 			if (predictionFeatureRepository.existsById(fixture.getId())) {
@@ -59,7 +59,7 @@ public class FeatureEngineeringService {
 		List<Fixture> fixtures = fixtureRepository
 				.findUpcomingFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
 
-		log.info("Found {} upcoming fixtures", fixtures.size());
+		log.debug("Found {} upcoming fixtures", fixtures.size());
 
 		for (Fixture fixture : fixtures) {
 			if (predictionFeatureRepository.existsById(fixture.getId())) {
