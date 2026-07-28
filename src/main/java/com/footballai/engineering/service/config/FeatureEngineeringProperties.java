@@ -12,9 +12,8 @@ import lombok.Setter;
 @ConfigurationProperties(prefix = "feature-engineering")
 public class FeatureEngineeringProperties {
 
-    private int lookbackMatches = 5;
+    private int lookbackMatches;
 
-    private int batchSize = 500;
+    private int batchSize;
 
-    private String featureVersion = "v4";
 }

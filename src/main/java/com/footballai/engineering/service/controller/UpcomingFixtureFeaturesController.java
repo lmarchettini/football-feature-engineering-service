@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.footballai.engineering.service.dto.UpcomingFixtureFeaturesResponse;
+import com.footballai.engineering.service.dto.UpcomingFeatureResponse;
 import com.footballai.engineering.service.service.UpcomingFixtureFeaturesService;
 import com.footballai.engineering.service.utils.FeatureRetrievalMode;
 
@@ -21,22 +21,24 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class UpcomingFixtureFeaturesController {
 
-    private final UpcomingFixtureFeaturesService upcomingFixtureFeaturesService;
+    private final UpcomingFixtureFeaturesService
+            upcomingFixtureFeaturesService;
 
     @GetMapping("/upcoming")
-    public ResponseEntity<List<UpcomingFixtureFeaturesResponse>>
-    findUpcomingFixtures(
+    public ResponseEntity<List<UpcomingFeatureResponse>>
+            findUpcomingFixtures(
 
             @RequestParam("from")
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            @DateTimeFormat(
+                    iso = DateTimeFormat.ISO.DATE_TIME
+            )
             LocalDateTime from,
 
             @RequestParam("to")
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            @DateTimeFormat(
+                    iso = DateTimeFormat.ISO.DATE_TIME
+            )
             LocalDateTime to,
-
-            @RequestParam("featureVersion")
-            String featureVersion,
 
             @RequestParam(
                     value = "mode",
@@ -44,14 +46,13 @@ public class UpcomingFixtureFeaturesController {
             )
             FeatureRetrievalMode mode
     ) {
-
-        List<UpcomingFixtureFeaturesResponse> response =
-                upcomingFixtureFeaturesService.findFixtures(
-                        from,
-                        to,
-                        featureVersion,
-                        mode
-                );
+        List<UpcomingFeatureResponse> response =
+                upcomingFixtureFeaturesService
+                        .findFixtures(
+                                from,
+                                to,
+                                mode
+                        );
 
         return ResponseEntity.ok(response);
     }

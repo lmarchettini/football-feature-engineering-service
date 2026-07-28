@@ -44,7 +44,11 @@ public class FeatureEngineeringService {
 		List<Fixture> fixtures = fixtureRepository
 				.findFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
 
-		log.debug("Found {} trainable fixtures", fixtures.size());
+		if (fixtures.isEmpty()) {
+	        log.debug("No trainable fixtures found");
+	    } else {
+	        log.info("Found {} trainable fixtures", fixtures.size());
+	    }
 
 		for (Fixture fixture : fixtures) {
 			if (predictionFeatureRepository.existsById(fixture.getId())) {
@@ -59,7 +63,11 @@ public class FeatureEngineeringService {
 		List<Fixture> fixtures = fixtureRepository
 				.findUpcomingFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
 
-		log.debug("Found {} upcoming fixtures", fixtures.size());
+		if (fixtures.isEmpty()) {
+	        log.debug("No upcoming fixtures found");
+	    } else {
+	        log.info("Found {} upcoming fixtures", fixtures.size());
+	    }
 
 		for (Fixture fixture : fixtures) {
 			if (predictionFeatureRepository.existsById(fixture.getId())) {
@@ -161,6 +169,37 @@ public class FeatureEngineeringService {
 
 				.homeOver25Rate5(homeStats5.over25Rate()).awayOver25Rate5(awayStats5.over25Rate())
 				.homeOver25Rate10(homeStats10.over25Rate()).awayOver25Rate10(awayStats10.over25Rate())
+				.homeScoredRate5(homeStats5.scoredRate())
+				.awayScoredRate5(awayStats5.scoredRate())
+
+				.homeScoredRate10(homeStats10.scoredRate())
+				.awayScoredRate10(awayStats10.scoredRate())
+
+				.homeConcededRate5(homeStats5.concededRate())
+				.awayConcededRate5(awayStats5.concededRate())
+
+				.homeConcededRate10(homeStats10.concededRate())
+				.awayConcededRate10(awayStats10.concededRate())
+
+				.homeAvgTotalGoals5(homeStats5.avgTotalGoals())
+				.awayAvgTotalGoals5(awayStats5.avgTotalGoals())
+
+				.homeAvgTotalGoals10(homeStats10.avgTotalGoals())
+				.awayAvgTotalGoals10(awayStats10.avgTotalGoals())
+
+				.expectedHomeGoals(
+				        average(
+				                homeHomeStats.avgXg(),
+				                awayAwayStats.avgXga()
+				        )
+				)
+
+				.expectedAwayGoals(
+				        average(
+				                awayAwayStats.avgXg(),
+				                homeHomeStats.avgXga()
+				        )
+				)
 
 				.combinedAvgXg(combinedAvgXg).expectedMatchGoals(expectedMatchGoals)
 
@@ -201,7 +240,6 @@ public class FeatureEngineeringService {
 				.targetDoubleChance12(homeGoals != awayGoals)
 
 				.isTrainable(true)
-				.featureVersion(properties.getFeatureVersion())
 				.build();
 	}
 
@@ -300,6 +338,38 @@ public class FeatureEngineeringService {
 
 				.homeOver25Rate5(homeStats5.over25Rate()).awayOver25Rate5(awayStats5.over25Rate())
 				.homeOver25Rate10(homeStats10.over25Rate()).awayOver25Rate10(awayStats10.over25Rate())
+				
+				.homeScoredRate5(homeStats5.scoredRate())
+				.awayScoredRate5(awayStats5.scoredRate())
+
+				.homeScoredRate10(homeStats10.scoredRate())
+				.awayScoredRate10(awayStats10.scoredRate())
+
+				.homeConcededRate5(homeStats5.concededRate())
+				.awayConcededRate5(awayStats5.concededRate())
+
+				.homeConcededRate10(homeStats10.concededRate())
+				.awayConcededRate10(awayStats10.concededRate())
+
+				.homeAvgTotalGoals5(homeStats5.avgTotalGoals())
+				.awayAvgTotalGoals5(awayStats5.avgTotalGoals())
+
+				.homeAvgTotalGoals10(homeStats10.avgTotalGoals())
+				.awayAvgTotalGoals10(awayStats10.avgTotalGoals())
+
+				.expectedHomeGoals(
+				        average(
+				                homeHomeStats.avgXg(),
+				                awayAwayStats.avgXga()
+				        )
+				)
+
+				.expectedAwayGoals(
+				        average(
+				                awayAwayStats.avgXg(),
+				                homeHomeStats.avgXga()
+				        )
+				)
 
 				.combinedAvgXg(combinedAvgXg).expectedMatchGoals(expectedMatchGoals)
 
@@ -321,7 +391,8 @@ public class FeatureEngineeringService {
 				.targetDoubleChanceX2(null)
 				.targetDoubleChance12(null)
 
-				.isTrainable(false).featureVersion(properties.getFeatureVersion()).build();
+				.isTrainable(false)
+				.build();
 	}
 
 	private TeamStats calculateTeamStats(Long teamId, Fixture currentFixture, int lookback) {
@@ -356,6 +427,10 @@ public class FeatureEngineeringService {
 		int goalsConceded = 0;
 		int wins = 0;
 		int cleanSheets = 0;
+		
+		int scoredMatches = 0;
+
+		int concededMatches = 0;
 
 		int bttsMatches = 0;
 		int over25Matches = 0;
@@ -402,6 +477,14 @@ public class FeatureEngineeringService {
 
 			goalsScored += teamGoals;
 			goalsConceded += opponentGoals;
+			
+			if (teamGoals > 0) {
+			    scoredMatches++;
+			}
+
+			if (opponentGoals > 0) {
+			    concededMatches++;
+			}
 
 			if (teamGoals > opponentGoals) {
 				wins++;
@@ -468,9 +551,24 @@ public class FeatureEngineeringService {
 			}
 		}
 
-		Integer restDays = null;
+		int restDays = 5;
 
 		Fixture lastMatch = previousMatches.get(0);
+		
+		if (lastMatch.getDate() != null
+		        && currentFixture.getDate() != null) {
+
+		    long calculatedRestDays =
+		            Duration.between(
+		                    lastMatch.getDate(),
+		                    currentFixture.getDate()
+		            ).toDays();
+
+		    restDays = (int) Math.max(
+		            0,
+		            Math.min(calculatedRestDays, 30)
+		    );
+		}
 
 		if (lastMatch.getDate() != null && currentFixture.getDate() != null) {
 
@@ -479,41 +577,78 @@ public class FeatureEngineeringService {
 
 		int matches = previousMatches.size();
 
-		return new TeamStats(divide(points, matches * 3), divide(goalsScored, matches), divide(goalsConceded, matches),
-				divide(wins, matches), divide(cleanSheets, matches), restDays,
+		return new TeamStats(
+		        divide(points, matches * 3),
 
-				divide(shotsTotal, statsMatches), divide(shotsOnGoal, statsMatches),
-				divideDecimal(possessionTotal, statsMatches), divideDecimal(passAccuracyTotal, statsMatches),
-				divide(corners, statsMatches), divide(shotsInsideBox, statsMatches),
+		        divide(goalsScored, matches),
 
-				/*
-				 * Gli xG vengono mediati soltanto sulle partite dove il dato è realmente
-				 * disponibile.
-				 */
-				divideDecimal(xgTotal, xgMatches), divideDecimal(xgaTotal, xgaMatches),
+		        divide(goalsConceded, matches),
 
-				divide(bttsMatches, matches), divide(over25Matches, matches));
+		        // Media dei gol totali prodotti nelle partite della squadra:
+		        // gol segnati + gol subiti.
+		        divide(goalsScored + goalsConceded, matches),
+
+		        divide(wins, matches),
+
+		        divide(cleanSheets, matches),
+
+		        // Percentuale di partite in cui la squadra ha segnato almeno un gol.
+		        divide(scoredMatches, matches),
+
+		        // Percentuale di partite in cui la squadra ha subito almeno un gol.
+		        divide(concededMatches, matches),
+
+		        restDays,
+
+		        divide(shotsTotal, statsMatches),
+
+		        divide(shotsOnGoal, statsMatches),
+
+		        divideDecimal(possessionTotal, statsMatches),
+
+		        divideDecimal(passAccuracyTotal, statsMatches),
+
+		        divide(corners, statsMatches),
+
+		        divide(shotsInsideBox, statsMatches),
+
+		        /*
+		         * Gli xG vengono mediati soltanto sulle partite dove il dato
+		         * è realmente disponibile.
+		         */
+		        divideDecimal(xgTotal, xgMatches),
+
+		        divideDecimal(xgaTotal, xgaMatches),
+
+		        divide(bttsMatches, matches),
+
+		        divide(over25Matches, matches)
+		);
 	}
 
 	private TeamStats emptyTeamStats() {
 
-		return new TeamStats(bd(0), // form
-				bd(0), // avgGoalsScored
-				bd(0), // avgGoalsConceded
-				bd(0), // winRate
-				bd(0), // cleanSheetRate
-				null, // restDays
-				bd(0), // avgShots
-				bd(0), // avgShotsOnGoal
-				bd(0), // avgPossession
-				bd(0), // avgPassAccuracy
-				bd(0), // avgCorners
-				bd(0), // avgShotsInsideBox
-				bd(0), // avgXg
-				bd(0), // avgXga
-				bd(0), // bttsRate
-				bd(0) // over25Rate
-		);
+		return new TeamStats(
+	            bd(0), // form
+	            bd(0), // avgGoalsScored
+	            bd(0), // avgGoalsConceded
+	            bd(0), // avgTotalGoals
+	            bd(0), // winRate
+	            bd(0), // cleanSheetRate
+	            bd(0), // scoredRate
+	            bd(0), // concededRate
+	            5,  // restDays
+	            bd(0), // avgShots
+	            bd(0), // avgShotsOnGoal
+	            bd(0), // avgPossession
+	            bd(0), // avgPassAccuracy
+	            bd(0), // avgCorners
+	            bd(0), // avgShotsInsideBox
+	            bd(0), // avgXg
+	            bd(0), // avgXga
+	            bd(0), // bttsRate
+	            bd(0)  // over25Rate
+	    );
 	}
 
 	private int[] calculateHeadToHead(Fixture fixture, int lookback) {

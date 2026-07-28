@@ -13,9 +13,4 @@ public interface PredictionFeatureRepository extends JpaRepository<PredictionFea
             Collection<Long> fixtureIds
     );
 	
-	List<PredictionFeature>
-    findByFixtureIdInAndFeatureVersion(
-            Collection<Long> fixtureIds,
-            String featureVersion
-    );
 }

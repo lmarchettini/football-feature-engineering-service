@@ -13,13 +13,12 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.footballai.engineering.service.dto.UpcomingFixtureFeaturesResponse;
+import com.footballai.engineering.service.dto.UpcomingFeatureResponse;
 import com.footballai.engineering.service.entity.Fixture;
 import com.footballai.engineering.service.entity.League;
 import com.footballai.engineering.service.entity.PredictionFeature;
 import com.footballai.engineering.service.entity.Team;
 import com.footballai.engineering.service.exception.FeatureReferenceException;
-import com.footballai.engineering.service.mapper.FeatureVectorMapper;
 import com.footballai.engineering.service.repository.FixtureRepository;
 import com.footballai.engineering.service.repository.LeagueRepository;
 import com.footballai.engineering.service.repository.PredictionFeatureRepository;
@@ -27,9 +26,11 @@ import com.footballai.engineering.service.repository.TeamRepository;
 import com.footballai.engineering.service.utils.FeatureRetrievalMode;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UpcomingFixtureFeaturesService {
 
     private final FixtureRepository fixtureRepository;
@@ -41,51 +42,41 @@ public class UpcomingFixtureFeaturesService {
 
     private final LeagueRepository leagueRepository;
 
-    private final FeatureVectorMapper featureVectorMapper;
+    private final FeatureMapMapper featureMapMapper;
 
     @Transactional(readOnly = true)
-    public List<UpcomingFixtureFeaturesResponse> findFixtures(
+    public List<UpcomingFeatureResponse> findFixtures(
             LocalDateTime fromDate,
             LocalDateTime toDate,
-            String featureVersion,
             FeatureRetrievalMode mode
     ) {
-
         validateRequest(
                 fromDate,
                 toDate,
-                featureVersion,
                 mode
         );
 
         List<Fixture> fixtures;
 
         if (mode == FeatureRetrievalMode.HISTORICAL) {
-
             fixtures =
                     fixtureRepository
                             .findHistoricalFixturesWithFeatures(
                                     fromDate,
-                                    toDate,
-                                    featureVersion
+                                    toDate
                             );
-
         } else {
-
             fixtures =
                     fixtureRepository
                             .findLiveFixturesWithFeatures(
                                     fromDate,
-                                    toDate,
-                                    featureVersion
+                                    toDate
                             );
         }
 
         if (fixtures.isEmpty()) {
             return Collections.emptyList();
         }
-
-        // Da qui in poi rimane invariato il codice attuale.
 
         Set<Long> fixtureIds =
                 fixtures.stream()
@@ -98,9 +89,8 @@ public class UpcomingFixtureFeaturesService {
 
         List<PredictionFeature> featureEntities =
                 predictionFeatureRepository
-                        .findByFixtureIdInAndFeatureVersion(
-                                fixtureIds,
-                                featureVersion
+                        .findByFixtureIdIn(
+                                fixtureIds
                         );
 
         Map<Long, PredictionFeature> featuresByFixtureId =
@@ -119,7 +109,6 @@ public class UpcomingFixtureFeaturesService {
                 new LinkedHashSet<>();
 
         for (Fixture fixture : fixtures) {
-
             teamIds.add(
                     fixture.getHomeTeamId()
             );
@@ -156,37 +145,50 @@ public class UpcomingFixtureFeaturesService {
                         );
 
         return fixtures.stream()
-                .map(
-                        fixture -> toResponse(
+                .map(fixture -> {
+                    try {
+                        return toResponse(
                                 fixture,
                                 featuresByFixtureId,
                                 teamsById,
                                 leaguesById
-                        )
-                )
+                        );
+                    } catch (Exception exception) {
+                        log.error(
+                                "Failed to build feature response: "
+                                        + "fixtureId={}, status={}, date={}, "
+                                        + "leagueId={}, homeTeamId={}, awayTeamId={}",
+                                fixture.getId(),
+                                fixture.getStatus(),
+                                fixture.getDate(),
+                                fixture.getLeagueId(),
+                                fixture.getHomeTeamId(),
+                                fixture.getAwayTeamId(),
+                                exception
+                        );
+
+                        throw exception;
+                    }
+                })
                 .toList();
     }
 
-    private UpcomingFixtureFeaturesResponse toResponse(
+    private UpcomingFeatureResponse toResponse(
             Fixture fixture,
-            Map<Long, PredictionFeature>
-                    featuresByFixtureId,
+            Map<Long, PredictionFeature> featuresByFixtureId,
             Map<Long, Team> teamsById,
             Map<Long, League> leaguesById
     ) {
-
         PredictionFeature predictionFeature =
                 featuresByFixtureId.get(
                         fixture.getId()
                 );
 
         if (predictionFeature == null) {
-
             throw new FeatureReferenceException(
-                    "PredictionFeature not found "
-                            + "for fixture "
+                    "PredictionFeature not found for fixture "
                             + fixture.getId()
-                );
+            );
         }
 
         Team homeTeam =
@@ -195,7 +197,6 @@ public class UpcomingFixtureFeaturesService {
                 );
 
         if (homeTeam == null) {
-
             throw new FeatureReferenceException(
                     "Home team "
                             + fixture.getHomeTeamId()
@@ -210,7 +211,6 @@ public class UpcomingFixtureFeaturesService {
                 );
 
         if (awayTeam == null) {
-
             throw new FeatureReferenceException(
                     "Away team "
                             + fixture.getAwayTeamId()
@@ -225,7 +225,6 @@ public class UpcomingFixtureFeaturesService {
                 );
 
         if (league == null) {
-
             throw new FeatureReferenceException(
                     "League "
                             + fixture.getLeagueId()
@@ -234,66 +233,30 @@ public class UpcomingFixtureFeaturesService {
             );
         }
 
-        List<BigDecimal> features =
-                featureVectorMapper.toVector(
+        Map<String, BigDecimal> features =
+                featureMapMapper.toMap(
                         predictionFeature
                 );
 
-        return UpcomingFixtureFeaturesResponse
-                .builder()
-                .fixtureId(
-                        fixture.getId()
-                )
-                .leagueId(
-                        league.getId()
-                )
-                .leagueName(
-                        league.getName()
-                )
-                .leagueCountry(
-                        league.getCountry()
-                )
-                .season(
-                        fixture.getSeason()
-                )
-                .kickoff(
-                        fixture.getDate()
-                )
-                .status(
-                        fixture.getStatus()
-                )
-                .homeTeamId(
-                        homeTeam.getId()
-                )
-                .homeTeamName(
-                        homeTeam.getName()
-                )
-                .awayTeamId(
-                        awayTeam.getId()
-                )
-                .awayTeamName(
-                        awayTeam.getName()
-                )
-                .featureVersion(
-                        predictionFeature
-                                .getFeatureVersion()
-                )
-                .featuresCount(
-                        features.size()
-                )
-                .features(
-                        features
-                )
-                .build();
+        return new UpcomingFeatureResponse(
+                fixture.getId(),
+                league.getId(),
+                league.getName(),
+                homeTeam.getId(),
+                homeTeam.getName(),
+                awayTeam.getId(),
+                awayTeam.getName(),
+                fixture.getDate(),
+                features.size(),
+                features
+        );
     }
 
     private void validateRequest(
             LocalDateTime fromDate,
             LocalDateTime toDate,
-            String featureVersion,
             FeatureRetrievalMode mode
     ) {
-
         if (fromDate == null) {
             throw new IllegalArgumentException(
                     "from must not be null"
@@ -309,14 +272,6 @@ public class UpcomingFixtureFeaturesService {
         if (!toDate.isAfter(fromDate)) {
             throw new IllegalArgumentException(
                     "to must be after from"
-            );
-        }
-
-        if (featureVersion == null
-                || featureVersion.isBlank()) {
-
-            throw new IllegalArgumentException(
-                    "featureVersion must not be blank"
             );
         }
 

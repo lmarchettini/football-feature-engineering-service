@@ -13,7 +13,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.footballai.engineering.service.dto.ApiErrorResponse;
 import com.footballai.engineering.service.exception.FeatureReferenceException;
-import com.footballai.engineering.service.exception.InvalidFeatureVectorException;
+
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -38,22 +38,6 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler({
-            InvalidFeatureVectorException.class,
-            FeatureReferenceException.class
-    })
-    public ResponseEntity<ApiErrorResponse>
-    handleInvalidFeatureData(
-            RuntimeException exception,
-            HttpServletRequest request
-    ) {
-
-        return buildResponse(
-                HttpStatus.UNPROCESSABLE_ENTITY,
-                exception.getMessage(),
-                request
-        );
-    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse>

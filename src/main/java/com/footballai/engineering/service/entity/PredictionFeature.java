@@ -12,7 +12,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-
 @Entity
 @Table(name = "prediction_features")
 @Getter
@@ -94,13 +93,13 @@ public class PredictionFeature {
 
     @Column(name = "target_over_25")
     private Boolean targetOver25;
-    
+
     @Column(name = "target_over_15")
     private Boolean targetOver15;
-    
+
     @Column(name = "target_under_45")
     private Boolean targetUnder45;
-    
+
     @Column(name = "target_double_chance_1x")
     private Boolean targetDoubleChance1x;
 
@@ -127,13 +126,10 @@ public class PredictionFeature {
 
     @Column(name = "away_avg_xga")
     private BigDecimal awayAvgXga;
-    
+
     @Column(name = "is_trainable")
     private Boolean isTrainable;
-    
-    @Column(name = "feature_version")
-    private String featureVersion;
-    
+
     @Column(name = "home_avg_shots_on_goal")
     private BigDecimal homeAvgShotsOnGoal;
 
@@ -199,7 +195,7 @@ public class PredictionFeature {
 
     @Column(name = "away_away_avg_xga")
     private BigDecimal awayAwayAvgXga;
-    
+
     @Column(name = "home_btts_rate_5")
     private BigDecimal homeBttsRate5;
 
@@ -229,8 +225,106 @@ public class PredictionFeature {
 
     @Column(name = "expected_match_goals")
     private BigDecimal expectedMatchGoals;
-    
- // ===== V5: DIFFERENCE FEATURES =====
+
+    // ===== GOAL MARKET FEATURES: BTTS / OVER 2.5 =====
+
+    /**
+     * Percentuale delle ultime 5 partite della squadra di casa
+     * in cui la squadra ha segnato almeno un gol.
+     */
+    @Column(name = "home_scored_rate_5")
+    private BigDecimal homeScoredRate5;
+
+    /**
+     * Percentuale delle ultime 5 partite della squadra ospite
+     * in cui la squadra ha segnato almeno un gol.
+     */
+    @Column(name = "away_scored_rate_5")
+    private BigDecimal awayScoredRate5;
+
+    /**
+     * Percentuale delle ultime 10 partite della squadra di casa
+     * in cui la squadra ha segnato almeno un gol.
+     */
+    @Column(name = "home_scored_rate_10")
+    private BigDecimal homeScoredRate10;
+
+    /**
+     * Percentuale delle ultime 10 partite della squadra ospite
+     * in cui la squadra ha segnato almeno un gol.
+     */
+    @Column(name = "away_scored_rate_10")
+    private BigDecimal awayScoredRate10;
+
+    /**
+     * Percentuale delle ultime 5 partite della squadra di casa
+     * in cui la squadra ha subito almeno un gol.
+     */
+    @Column(name = "home_conceded_rate_5")
+    private BigDecimal homeConcededRate5;
+
+    /**
+     * Percentuale delle ultime 5 partite della squadra ospite
+     * in cui la squadra ha subito almeno un gol.
+     */
+    @Column(name = "away_conceded_rate_5")
+    private BigDecimal awayConcededRate5;
+
+    /**
+     * Percentuale delle ultime 10 partite della squadra di casa
+     * in cui la squadra ha subito almeno un gol.
+     */
+    @Column(name = "home_conceded_rate_10")
+    private BigDecimal homeConcededRate10;
+
+    /**
+     * Percentuale delle ultime 10 partite della squadra ospite
+     * in cui la squadra ha subito almeno un gol.
+     */
+    @Column(name = "away_conceded_rate_10")
+    private BigDecimal awayConcededRate10;
+
+    /**
+     * Media dei gol totali delle ultime 5 partite della squadra di casa:
+     * gol segnati + gol subiti.
+     */
+    @Column(name = "home_avg_total_goals_5")
+    private BigDecimal homeAvgTotalGoals5;
+
+    /**
+     * Media dei gol totali delle ultime 5 partite della squadra ospite:
+     * gol segnati + gol subiti.
+     */
+    @Column(name = "away_avg_total_goals_5")
+    private BigDecimal awayAvgTotalGoals5;
+
+    /**
+     * Media dei gol totali delle ultime 10 partite della squadra di casa:
+     * gol segnati + gol subiti.
+     */
+    @Column(name = "home_avg_total_goals_10")
+    private BigDecimal homeAvgTotalGoals10;
+
+    /**
+     * Media dei gol totali delle ultime 10 partite della squadra ospite:
+     * gol segnati + gol subiti.
+     */
+    @Column(name = "away_avg_total_goals_10")
+    private BigDecimal awayAvgTotalGoals10;
+
+    /**
+     * Numero atteso di gol della squadra di casa.
+     */
+    @Column(name = "expected_home_goals")
+    private BigDecimal expectedHomeGoals;
+
+    /**
+     * Numero atteso di gol della squadra ospite.
+     */
+    @Column(name = "expected_away_goals")
+    private BigDecimal expectedAwayGoals;
+
+    // ===== V5: DIFFERENCE FEATURES =====
 
     @Column(name = "form_difference")
     private BigDecimal formDifference;
