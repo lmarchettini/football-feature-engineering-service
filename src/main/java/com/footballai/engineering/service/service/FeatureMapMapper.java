@@ -356,6 +356,71 @@ public class FeatureMapMapper {
         put(result,
                 "expected_away_goals",
                 feature.getExpectedAwayGoals());
+        
+        
+        /*
+         * Gol stimati con fallback
+         */
+
+        put(result,
+                "estimated_home_goals",
+                feature.getEstimatedHomeGoals());
+
+        put(result,
+                "estimated_away_goals",
+                feature.getEstimatedAwayGoals());
+        
+        /*
+         * BTTS interaction features
+         */
+
+        put(result,
+                "min_expected_goals",
+                feature.getMinExpectedGoals());
+
+        put(result,
+                "max_expected_goals",
+                feature.getMaxExpectedGoals());
+
+        put(result,
+                "expected_goals_gap",
+                feature.getExpectedGoalsGap());
+
+        put(result,
+                "expected_goals_product",
+                feature.getExpectedGoalsProduct());
+
+        put(result,
+                "min_scored_rate_5",
+                feature.getMinScoredRate5());
+
+        put(result,
+                "min_scored_rate_10",
+                feature.getMinScoredRate10());
+
+        put(result,
+                "scored_rate_product_10",
+                feature.getScoredRateProduct10());
+
+        put(result,
+                "min_conceded_rate_5",
+                feature.getMinConcededRate5());
+
+        put(result,
+                "min_conceded_rate_10",
+                feature.getMinConcededRate10());
+
+        put(result,
+                "conceded_rate_product_10",
+                feature.getConcededRateProduct10());
+
+        put(result,
+                "home_attack_vs_away_defence",
+                feature.getHomeAttackVsAwayDefence());
+
+        put(result,
+                "away_attack_vs_home_defence",
+                feature.getAwayAttackVsHomeDefence());
 
         return Map.copyOf(result);
     }

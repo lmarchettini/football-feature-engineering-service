@@ -45,10 +45,10 @@ public class FeatureEngineeringService {
 				.findFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
 
 		if (fixtures.isEmpty()) {
-	        log.debug("No trainable fixtures found");
-	    } else {
-	        log.info("Found {} trainable fixtures", fixtures.size());
-	    }
+			log.debug("No trainable fixtures found");
+		} else {
+			log.info("Found {} trainable fixtures", fixtures.size());
+		}
 
 		for (Fixture fixture : fixtures) {
 			if (predictionFeatureRepository.existsById(fixture.getId())) {
@@ -64,10 +64,10 @@ public class FeatureEngineeringService {
 				.findUpcomingFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
 
 		if (fixtures.isEmpty()) {
-	        log.debug("No upcoming fixtures found");
-	    } else {
-	        log.info("Found {} upcoming fixtures", fixtures.size());
-	    }
+			log.debug("No upcoming fixtures found");
+		} else {
+			log.info("Found {} upcoming fixtures", fixtures.size());
+		}
 
 		for (Fixture fixture : fixtures) {
 			if (predictionFeatureRepository.existsById(fixture.getId())) {
@@ -88,6 +88,14 @@ public class FeatureEngineeringService {
 
 		TeamStats homeHomeStats = calculateHomeTeamStats(fixture.getHomeTeamId(), fixture, 5);
 		TeamStats awayAwayStats = calculateAwayTeamStats(fixture.getAwayTeamId(), fixture, 5);
+
+		BttsInteractionFeatures bttsInteractionFeatures = calculateBttsInteractionFeatures(
+				homeStats5, 
+				awayStats5,
+				homeStats10, 
+				awayStats10, 
+				homeHomeStats, 
+				awayAwayStats);
 
 		BigDecimal combinedAvgXg = calculateCombinedAvgXg(homeStats5, awayStats5);
 
@@ -169,37 +177,53 @@ public class FeatureEngineeringService {
 
 				.homeOver25Rate5(homeStats5.over25Rate()).awayOver25Rate5(awayStats5.over25Rate())
 				.homeOver25Rate10(homeStats10.over25Rate()).awayOver25Rate10(awayStats10.over25Rate())
-				.homeScoredRate5(homeStats5.scoredRate())
-				.awayScoredRate5(awayStats5.scoredRate())
+				.homeScoredRate5(homeStats5.scoredRate()).awayScoredRate5(awayStats5.scoredRate())
 
-				.homeScoredRate10(homeStats10.scoredRate())
-				.awayScoredRate10(awayStats10.scoredRate())
+				.homeScoredRate10(homeStats10.scoredRate()).awayScoredRate10(awayStats10.scoredRate())
 
-				.homeConcededRate5(homeStats5.concededRate())
-				.awayConcededRate5(awayStats5.concededRate())
+				.homeConcededRate5(homeStats5.concededRate()).awayConcededRate5(awayStats5.concededRate())
 
-				.homeConcededRate10(homeStats10.concededRate())
-				.awayConcededRate10(awayStats10.concededRate())
+				.homeConcededRate10(homeStats10.concededRate()).awayConcededRate10(awayStats10.concededRate())
 
-				.homeAvgTotalGoals5(homeStats5.avgTotalGoals())
-				.awayAvgTotalGoals5(awayStats5.avgTotalGoals())
+				.homeAvgTotalGoals5(homeStats5.avgTotalGoals()).awayAvgTotalGoals5(awayStats5.avgTotalGoals())
 
-				.homeAvgTotalGoals10(homeStats10.avgTotalGoals())
-				.awayAvgTotalGoals10(awayStats10.avgTotalGoals())
+				.homeAvgTotalGoals10(homeStats10.avgTotalGoals()).awayAvgTotalGoals10(awayStats10.avgTotalGoals())
 
-				.expectedHomeGoals(
-				        average(
-				                homeHomeStats.avgXg(),
-				                awayAwayStats.avgXga()
-				        )
+				.expectedHomeGoals(average(homeHomeStats.avgXg(), awayAwayStats.avgXga()))
+
+				.expectedAwayGoals(average(awayAwayStats.avgXg(), homeHomeStats.avgXga()))
+				
+				.estimatedHomeGoals(
+						bttsInteractionFeatures.estimatedHomeGoals()
 				)
 
-				.expectedAwayGoals(
-				        average(
-				                awayAwayStats.avgXg(),
-				                homeHomeStats.avgXga()
-				        )
+				.estimatedAwayGoals(
+						bttsInteractionFeatures.estimatedAwayGoals()
 				)
+
+				.minExpectedGoals(bttsInteractionFeatures.minExpectedGoals())
+
+				.maxExpectedGoals(bttsInteractionFeatures.maxExpectedGoals())
+
+				.expectedGoalsGap(bttsInteractionFeatures.expectedGoalsGap())
+
+				.expectedGoalsProduct(bttsInteractionFeatures.expectedGoalsProduct())
+
+				.minScoredRate5(bttsInteractionFeatures.minScoredRate5())
+
+				.minScoredRate10(bttsInteractionFeatures.minScoredRate10())
+
+				.scoredRateProduct10(bttsInteractionFeatures.scoredRateProduct10())
+
+				.minConcededRate5(bttsInteractionFeatures.minConcededRate5())
+
+				.minConcededRate10(bttsInteractionFeatures.minConcededRate10())
+
+				.concededRateProduct10(bttsInteractionFeatures.concededRateProduct10())
+
+				.homeAttackVsAwayDefence(bttsInteractionFeatures.homeAttackVsAwayDefence())
+
+				.awayAttackVsHomeDefence(bttsInteractionFeatures.awayAttackVsHomeDefence())
 
 				.combinedAvgXg(combinedAvgXg).expectedMatchGoals(expectedMatchGoals)
 
@@ -232,6 +256,9 @@ public class FeatureEngineeringService {
 				.targetBtts(homeGoals > 0 && awayGoals > 0)
 
 				.targetHomeWin(homeGoals > awayGoals)
+				
+				.targetHomeScored(homeGoals > 0)
+				.targetAwayScored(awayGoals > 0)
 
 				.targetDoubleChance1x(homeGoals >= awayGoals)
 
@@ -239,8 +266,7 @@ public class FeatureEngineeringService {
 
 				.targetDoubleChance12(homeGoals != awayGoals)
 
-				.isTrainable(true)
-				.build();
+				.isTrainable(true).build();
 	}
 
 	private PredictionFeature buildUpcomingFeature(Fixture fixture) {
@@ -253,6 +279,9 @@ public class FeatureEngineeringService {
 
 		TeamStats homeHomeStats = calculateHomeTeamStats(fixture.getHomeTeamId(), fixture, 5);
 		TeamStats awayAwayStats = calculateAwayTeamStats(fixture.getAwayTeamId(), fixture, 5);
+
+		BttsInteractionFeatures bttsInteractionFeatures = calculateBttsInteractionFeatures(homeStats5, awayStats5,
+				homeStats10, awayStats10, homeHomeStats, awayAwayStats);
 
 		BigDecimal combinedAvgXg = calculateCombinedAvgXg(homeStats5, awayStats5);
 
@@ -338,38 +367,54 @@ public class FeatureEngineeringService {
 
 				.homeOver25Rate5(homeStats5.over25Rate()).awayOver25Rate5(awayStats5.over25Rate())
 				.homeOver25Rate10(homeStats10.over25Rate()).awayOver25Rate10(awayStats10.over25Rate())
+
+				.homeScoredRate5(homeStats5.scoredRate()).awayScoredRate5(awayStats5.scoredRate())
+
+				.homeScoredRate10(homeStats10.scoredRate()).awayScoredRate10(awayStats10.scoredRate())
+
+				.homeConcededRate5(homeStats5.concededRate()).awayConcededRate5(awayStats5.concededRate())
+
+				.homeConcededRate10(homeStats10.concededRate()).awayConcededRate10(awayStats10.concededRate())
+
+				.homeAvgTotalGoals5(homeStats5.avgTotalGoals()).awayAvgTotalGoals5(awayStats5.avgTotalGoals())
+
+				.homeAvgTotalGoals10(homeStats10.avgTotalGoals()).awayAvgTotalGoals10(awayStats10.avgTotalGoals())
+
+				.expectedHomeGoals(average(homeHomeStats.avgXg(), awayAwayStats.avgXga()))
+
+				.expectedAwayGoals(average(awayAwayStats.avgXg(), homeHomeStats.avgXga()))
 				
-				.homeScoredRate5(homeStats5.scoredRate())
-				.awayScoredRate5(awayStats5.scoredRate())
-
-				.homeScoredRate10(homeStats10.scoredRate())
-				.awayScoredRate10(awayStats10.scoredRate())
-
-				.homeConcededRate5(homeStats5.concededRate())
-				.awayConcededRate5(awayStats5.concededRate())
-
-				.homeConcededRate10(homeStats10.concededRate())
-				.awayConcededRate10(awayStats10.concededRate())
-
-				.homeAvgTotalGoals5(homeStats5.avgTotalGoals())
-				.awayAvgTotalGoals5(awayStats5.avgTotalGoals())
-
-				.homeAvgTotalGoals10(homeStats10.avgTotalGoals())
-				.awayAvgTotalGoals10(awayStats10.avgTotalGoals())
-
-				.expectedHomeGoals(
-				        average(
-				                homeHomeStats.avgXg(),
-				                awayAwayStats.avgXga()
-				        )
+				.estimatedHomeGoals(
+						bttsInteractionFeatures.estimatedHomeGoals()
 				)
 
-				.expectedAwayGoals(
-				        average(
-				                awayAwayStats.avgXg(),
-				                homeHomeStats.avgXga()
-				        )
+				.estimatedAwayGoals(
+						bttsInteractionFeatures.estimatedAwayGoals()
 				)
+
+				.minExpectedGoals(bttsInteractionFeatures.minExpectedGoals())
+
+				.maxExpectedGoals(bttsInteractionFeatures.maxExpectedGoals())
+
+				.expectedGoalsGap(bttsInteractionFeatures.expectedGoalsGap())
+
+				.expectedGoalsProduct(bttsInteractionFeatures.expectedGoalsProduct())
+
+				.minScoredRate5(bttsInteractionFeatures.minScoredRate5())
+
+				.minScoredRate10(bttsInteractionFeatures.minScoredRate10())
+
+				.scoredRateProduct10(bttsInteractionFeatures.scoredRateProduct10())
+
+				.minConcededRate5(bttsInteractionFeatures.minConcededRate5())
+
+				.minConcededRate10(bttsInteractionFeatures.minConcededRate10())
+
+				.concededRateProduct10(bttsInteractionFeatures.concededRateProduct10())
+
+				.homeAttackVsAwayDefence(bttsInteractionFeatures.homeAttackVsAwayDefence())
+
+				.awayAttackVsHomeDefence(bttsInteractionFeatures.awayAttackVsHomeDefence())
 
 				.combinedAvgXg(combinedAvgXg).expectedMatchGoals(expectedMatchGoals)
 
@@ -381,18 +426,12 @@ public class FeatureEngineeringService {
 
 				.oddsHome(null).oddsDraw(null).oddsAway(null)
 
-				.targetGoal(null)
-				.targetOver15(null)
-				.targetOver25(null)
-				.targetUnder45(null)
-				.targetBtts(null)
-				.targetHomeWin(null)
-				.targetDoubleChance1x(null)
-				.targetDoubleChanceX2(null)
-				.targetDoubleChance12(null)
+				.targetGoal(null).targetOver15(null).targetOver25(null).targetUnder45(null).targetBtts(null)
+				.targetHomeScored(null)
+				.targetAwayScored(null)
+				.targetHomeWin(null).targetDoubleChance1x(null).targetDoubleChanceX2(null).targetDoubleChance12(null)
 
-				.isTrainable(false)
-				.build();
+				.isTrainable(false).build();
 	}
 
 	private TeamStats calculateTeamStats(Long teamId, Fixture currentFixture, int lookback) {
@@ -427,7 +466,7 @@ public class FeatureEngineeringService {
 		int goalsConceded = 0;
 		int wins = 0;
 		int cleanSheets = 0;
-		
+
 		int scoredMatches = 0;
 
 		int concededMatches = 0;
@@ -477,13 +516,13 @@ public class FeatureEngineeringService {
 
 			goalsScored += teamGoals;
 			goalsConceded += opponentGoals;
-			
+
 			if (teamGoals > 0) {
-			    scoredMatches++;
+				scoredMatches++;
 			}
 
 			if (opponentGoals > 0) {
-			    concededMatches++;
+				concededMatches++;
 			}
 
 			if (teamGoals > opponentGoals) {
@@ -554,20 +593,12 @@ public class FeatureEngineeringService {
 		int restDays = 5;
 
 		Fixture lastMatch = previousMatches.get(0);
-		
-		if (lastMatch.getDate() != null
-		        && currentFixture.getDate() != null) {
 
-		    long calculatedRestDays =
-		            Duration.between(
-		                    lastMatch.getDate(),
-		                    currentFixture.getDate()
-		            ).toDays();
+		if (lastMatch.getDate() != null && currentFixture.getDate() != null) {
 
-		    restDays = (int) Math.max(
-		            0,
-		            Math.min(calculatedRestDays, 30)
-		    );
+			long calculatedRestDays = Duration.between(lastMatch.getDate(), currentFixture.getDate()).toDays();
+
+			restDays = (int) Math.max(0, Math.min(calculatedRestDays, 30));
 		}
 
 		if (lastMatch.getDate() != null && currentFixture.getDate() != null) {
@@ -577,78 +608,75 @@ public class FeatureEngineeringService {
 
 		int matches = previousMatches.size();
 
-		return new TeamStats(
-		        divide(points, matches * 3),
+		return new TeamStats(divide(points, matches * 3),
 
-		        divide(goalsScored, matches),
+				divide(goalsScored, matches),
 
-		        divide(goalsConceded, matches),
+				divide(goalsConceded, matches),
 
-		        // Media dei gol totali prodotti nelle partite della squadra:
-		        // gol segnati + gol subiti.
-		        divide(goalsScored + goalsConceded, matches),
+				// Media dei gol totali prodotti nelle partite della squadra:
+				// gol segnati + gol subiti.
+				divide(goalsScored + goalsConceded, matches),
 
-		        divide(wins, matches),
+				divide(wins, matches),
 
-		        divide(cleanSheets, matches),
+				divide(cleanSheets, matches),
 
-		        // Percentuale di partite in cui la squadra ha segnato almeno un gol.
-		        divide(scoredMatches, matches),
+				// Percentuale di partite in cui la squadra ha segnato almeno un gol.
+				divide(scoredMatches, matches),
 
-		        // Percentuale di partite in cui la squadra ha subito almeno un gol.
-		        divide(concededMatches, matches),
+				// Percentuale di partite in cui la squadra ha subito almeno un gol.
+				divide(concededMatches, matches),
 
-		        restDays,
+				restDays,
 
-		        divide(shotsTotal, statsMatches),
+				divide(shotsTotal, statsMatches),
 
-		        divide(shotsOnGoal, statsMatches),
+				divide(shotsOnGoal, statsMatches),
 
-		        divideDecimal(possessionTotal, statsMatches),
+				divideDecimal(possessionTotal, statsMatches),
 
-		        divideDecimal(passAccuracyTotal, statsMatches),
+				divideDecimal(passAccuracyTotal, statsMatches),
 
-		        divide(corners, statsMatches),
+				divide(corners, statsMatches),
 
-		        divide(shotsInsideBox, statsMatches),
+				divide(shotsInsideBox, statsMatches),
 
-		        /*
-		         * Gli xG vengono mediati soltanto sulle partite dove il dato
-		         * è realmente disponibile.
-		         */
-		        divideDecimal(xgTotal, xgMatches),
+				/*
+				 * Gli xG vengono mediati soltanto sulle partite dove il dato è realmente
+				 * disponibile.
+				 */
+				divideDecimal(xgTotal, xgMatches),
 
-		        divideDecimal(xgaTotal, xgaMatches),
+				divideDecimal(xgaTotal, xgaMatches),
 
-		        divide(bttsMatches, matches),
+				divide(bttsMatches, matches),
 
-		        divide(over25Matches, matches)
-		);
+				divide(over25Matches, matches));
 	}
 
 	private TeamStats emptyTeamStats() {
 
-		return new TeamStats(
-	            bd(0), // form
-	            bd(0), // avgGoalsScored
-	            bd(0), // avgGoalsConceded
-	            bd(0), // avgTotalGoals
-	            bd(0), // winRate
-	            bd(0), // cleanSheetRate
-	            bd(0), // scoredRate
-	            bd(0), // concededRate
-	            5,  // restDays
-	            bd(0), // avgShots
-	            bd(0), // avgShotsOnGoal
-	            bd(0), // avgPossession
-	            bd(0), // avgPassAccuracy
-	            bd(0), // avgCorners
-	            bd(0), // avgShotsInsideBox
-	            bd(0), // avgXg
-	            bd(0), // avgXga
-	            bd(0), // bttsRate
-	            bd(0)  // over25Rate
-	    );
+		return new TeamStats(bd(0), // form
+				bd(0), // avgGoalsScored
+				bd(0), // avgGoalsConceded
+				bd(0), // avgTotalGoals
+				bd(0), // winRate
+				bd(0), // cleanSheetRate
+				bd(0), // scoredRate
+				bd(0), // concededRate
+				5, // restDays
+				bd(0), // avgShots
+				bd(0), // avgShotsOnGoal
+				bd(0), // avgPossession
+				bd(0), // avgPassAccuracy
+				bd(0), // avgCorners
+				bd(0), // avgShotsInsideBox
+				bd(0), // avgXg
+				bd(0), // avgXga
+				bd(0), // bttsRate
+				bd(0) // over25Rate
+		);
 	}
 
 	private int[] calculateHeadToHead(Fixture fixture, int lookback) {
@@ -730,5 +758,120 @@ public class FeatureEngineeringService {
 	private BigDecimal calculateDifference(BigDecimal homeValue, BigDecimal awayValue) {
 
 		return safeDecimal(homeValue).subtract(safeDecimal(awayValue)).setScale(4, RoundingMode.HALF_UP);
+	}
+
+	private BttsInteractionFeatures calculateBttsInteractionFeatures(TeamStats homeStats5, TeamStats awayStats5,
+			TeamStats homeStats10, TeamStats awayStats10, TeamStats homeHomeStats, TeamStats awayAwayStats) {
+
+		BigDecimal estimatedHomeGoals = calculateEstimatedGoals(homeHomeStats.avgXg(), awayAwayStats.avgXga(),
+				homeHomeStats.avgGoalsScored(), awayAwayStats.avgGoalsConceded());
+
+		BigDecimal estimatedAwayGoals = calculateEstimatedGoals(awayAwayStats.avgXg(), homeHomeStats.avgXga(),
+				awayAwayStats.avgGoalsScored(), homeHomeStats.avgGoalsConceded());
+
+		BigDecimal minExpectedGoals = minimum(estimatedHomeGoals, estimatedAwayGoals);
+
+		BigDecimal maxExpectedGoals = maximum(estimatedHomeGoals, estimatedAwayGoals);
+
+		BigDecimal expectedGoalsGap = absoluteDifference(estimatedHomeGoals, estimatedAwayGoals);
+
+		BigDecimal expectedGoalsProduct = multiply(estimatedHomeGoals, estimatedAwayGoals);
+
+		BigDecimal minScoredRate5 = minimum(homeStats5.scoredRate(), awayStats5.scoredRate());
+
+		BigDecimal minScoredRate10 = minimum(homeStats10.scoredRate(), awayStats10.scoredRate());
+
+		BigDecimal scoredRateProduct10 = multiply(homeStats10.scoredRate(), awayStats10.scoredRate());
+
+		BigDecimal minConcededRate5 = minimum(homeStats5.concededRate(), awayStats5.concededRate());
+
+		BigDecimal minConcededRate10 = minimum(homeStats10.concededRate(), awayStats10.concededRate());
+
+		BigDecimal concededRateProduct10 = multiply(homeStats10.concededRate(), awayStats10.concededRate());
+
+		/*
+		 * Prestazioni split: attacco casalingo contro difesa esterna; attacco esterno
+		 * contro difesa casalinga.
+		 */
+		BigDecimal homeAttackVsAwayDefence = multiply(homeHomeStats.avgGoalsScored(), awayAwayStats.avgGoalsConceded());
+
+		BigDecimal awayAttackVsHomeDefence = multiply(awayAwayStats.avgGoalsScored(), homeHomeStats.avgGoalsConceded());
+
+		return new BttsInteractionFeatures(estimatedHomeGoals, estimatedAwayGoals, minExpectedGoals, maxExpectedGoals,
+				expectedGoalsGap, expectedGoalsProduct, minScoredRate5, minScoredRate10, scoredRateProduct10,
+				minConcededRate5, minConcededRate10, concededRateProduct10, homeAttackVsAwayDefence,
+				awayAttackVsHomeDefence);
+	}
+
+	private BigDecimal calculateEstimatedGoals(BigDecimal attackingXg, BigDecimal defendingXga,
+			BigDecimal averageGoalsScored, BigDecimal opponentAverageGoalsConceded) {
+
+		if (isPositive(attackingXg) && isPositive(defendingXga)) {
+
+			return average(attackingXg, defendingXga);
+		}
+
+		return average(averageGoalsScored, opponentAverageGoalsConceded);
+	}
+	
+	private boolean isPositive(BigDecimal value) {
+	    return value != null
+	            && value.compareTo(BigDecimal.ZERO) > 0;
+	}
+	
+	private BigDecimal minimum(
+	        BigDecimal first,
+	        BigDecimal second
+	) {
+	    return safeDecimal(first)
+	            .min(safeDecimal(second))
+	            .setScale(
+	                    4,
+	                    RoundingMode.HALF_UP
+	            );
+	}
+
+	private BigDecimal maximum(
+	        BigDecimal first,
+	        BigDecimal second
+	) {
+	    return safeDecimal(first)
+	            .max(safeDecimal(second))
+	            .setScale(
+	                    4,
+	                    RoundingMode.HALF_UP
+	            );
+	}
+
+	private BigDecimal absoluteDifference(
+	        BigDecimal first,
+	        BigDecimal second
+	) {
+	    return safeDecimal(first)
+	            .subtract(safeDecimal(second))
+	            .abs()
+	            .setScale(
+	                    4,
+	                    RoundingMode.HALF_UP
+	            );
+	}
+
+	private BigDecimal multiply(
+	        BigDecimal first,
+	        BigDecimal second
+	) {
+	    return safeDecimal(first)
+	            .multiply(safeDecimal(second))
+	            .setScale(
+	                    4,
+	                    RoundingMode.HALF_UP
+	            );
+	}
+
+	private record BttsInteractionFeatures(BigDecimal estimatedHomeGoals, BigDecimal estimatedAwayGoals,
+			BigDecimal minExpectedGoals, BigDecimal maxExpectedGoals, BigDecimal expectedGoalsGap,
+			BigDecimal expectedGoalsProduct, BigDecimal minScoredRate5, BigDecimal minScoredRate10,
+			BigDecimal scoredRateProduct10, BigDecimal minConcededRate5, BigDecimal minConcededRate10,
+			BigDecimal concededRateProduct10, BigDecimal homeAttackVsAwayDefence, BigDecimal awayAttackVsHomeDefence) {
 	}
 }

@@ -114,6 +114,12 @@ public class PredictionFeature {
 
     @Column(name = "target_home_win")
     private Boolean targetHomeWin;
+    
+    @Column(name = "target_home_scored")
+    private Boolean targetHomeScored;
+
+    @Column(name = "target_away_scored")
+    private Boolean targetAwayScored;
 
     @Column(name = "home_avg_xg")
     private BigDecimal homeAvgXg;
@@ -323,8 +329,24 @@ public class PredictionFeature {
      */
     @Column(name = "expected_away_goals")
     private BigDecimal expectedAwayGoals;
+    
+    /**
+     * Gol stimati della squadra di casa.
+     *
+     * Utilizza gli xG split casa/trasferta quando disponibili;
+     * altrimenti utilizza i gol medi segnati e subiti.
+     */
+    @Column(name = "estimated_home_goals")
+    private BigDecimal estimatedHomeGoals;
 
-    // ===== V5: DIFFERENCE FEATURES =====
+    /**
+     * Gol stimati della squadra ospite.
+     *
+     * Utilizza gli xG split casa/trasferta quando disponibili;
+     * altrimenti utilizza i gol medi segnati e subiti.
+     */
+    @Column(name = "estimated_away_goals")
+    private BigDecimal estimatedAwayGoals;
 
     @Column(name = "form_difference")
     private BigDecimal formDifference;
@@ -355,4 +377,90 @@ public class PredictionFeature {
 
     @Column(name = "pass_accuracy_difference")
     private BigDecimal passAccuracyDifference;
+    
+    // ===== BTTS INTERACTION FEATURES =====
+
+    /**
+     * Valore minimo tra i gol attesi della squadra di casa
+     * e quelli della squadra ospite.
+     */
+    @Column(name = "min_expected_goals")
+    private BigDecimal minExpectedGoals;
+
+    /**
+     * Valore massimo tra i gol attesi della squadra di casa
+     * e quelli della squadra ospite.
+     */
+    @Column(name = "max_expected_goals")
+    private BigDecimal maxExpectedGoals;
+
+    /**
+     * Differenza assoluta tra i gol attesi delle due squadre.
+     */
+    @Column(name = "expected_goals_gap")
+    private BigDecimal expectedGoalsGap;
+
+    /**
+     * Prodotto tra i gol attesi delle due squadre.
+     */
+    @Column(name = "expected_goals_product")
+    private BigDecimal expectedGoalsProduct;
+
+    /**
+     * Minore frequenza realizzativa tra le due squadre
+     * nelle ultime 5 partite.
+     */
+    @Column(name = "min_scored_rate_5")
+    private BigDecimal minScoredRate5;
+
+    /**
+     * Minore frequenza realizzativa tra le due squadre
+     * nelle ultime 10 partite.
+     */
+    @Column(name = "min_scored_rate_10")
+    private BigDecimal minScoredRate10;
+
+    /**
+     * Prodotto delle frequenze realizzative delle due squadre
+     * nelle ultime 10 partite.
+     */
+    @Column(name = "scored_rate_product_10")
+    private BigDecimal scoredRateProduct10;
+
+    /**
+     * Minore frequenza con cui le due squadre hanno subito gol
+     * nelle ultime 5 partite.
+     */
+    @Column(name = "min_conceded_rate_5")
+    private BigDecimal minConcededRate5;
+
+    /**
+     * Minore frequenza con cui le due squadre hanno subito gol
+     * nelle ultime 10 partite.
+     */
+    @Column(name = "min_conceded_rate_10")
+    private BigDecimal minConcededRate10;
+
+    /**
+     * Prodotto delle frequenze con cui le due squadre
+     * hanno subito gol nelle ultime 10 partite.
+     */
+    @Column(name = "conceded_rate_product_10")
+    private BigDecimal concededRateProduct10;
+
+    /**
+     * Capacità realizzativa della squadra di casa incrociata
+     * con la vulnerabilità difensiva della squadra ospite.
+     */
+    @Column(name = "home_attack_vs_away_defence")
+    private BigDecimal homeAttackVsAwayDefence;
+
+    /**
+     * Capacità realizzativa della squadra ospite incrociata
+     * con la vulnerabilità difensiva della squadra di casa.
+     */
+    @Column(name = "away_attack_vs_home_defence")
+    private BigDecimal awayAttackVsHomeDefence;
+    
+    
 }
