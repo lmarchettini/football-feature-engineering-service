@@ -15,11 +15,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.footballai.engineering.service.dto.UpcomingFeatureResponse;
 import com.footballai.engineering.service.entity.Fixture;
+import com.footballai.engineering.service.entity.GoalProbability;
 import com.footballai.engineering.service.entity.League;
 import com.footballai.engineering.service.entity.PredictionFeature;
 import com.footballai.engineering.service.entity.Team;
 import com.footballai.engineering.service.exception.FeatureReferenceException;
 import com.footballai.engineering.service.repository.FixtureRepository;
+import com.footballai.engineering.service.repository.GoalProbabilityRepository;
 import com.footballai.engineering.service.repository.LeagueRepository;
 import com.footballai.engineering.service.repository.PredictionFeatureRepository;
 import com.footballai.engineering.service.repository.TeamRepository;
@@ -43,6 +45,9 @@ public class UpcomingFixtureFeaturesService {
     private final LeagueRepository leagueRepository;
 
     private final FeatureMapMapper featureMapMapper;
+    
+    private final GoalProbabilityRepository
+    goalProbabilityRepository;
 
     @Transactional(readOnly = true)
     public List<UpcomingFeatureResponse> findFixtures(
@@ -101,6 +106,23 @@ public class UpcomingFixtureFeaturesService {
                                         Function.identity()
                                 )
                         );
+        
+        List<GoalProbability> goalProbabilities =
+                goalProbabilityRepository
+                        .findByFixtureIdInAndEngine(
+                                fixtureIds,
+                                "DIXON_COLES"
+                        );
+
+        Map<Long, GoalProbability>
+                goalProbabilitiesByFixtureId =
+                goalProbabilities.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        GoalProbability::getFixtureId,
+                                        Function.identity()
+                                )
+                        );
 
         Set<Long> teamIds =
                 new LinkedHashSet<>();
@@ -150,6 +172,7 @@ public class UpcomingFixtureFeaturesService {
                         return toResponse(
                                 fixture,
                                 featuresByFixtureId,
+                                goalProbabilitiesByFixtureId,
                                 teamsById,
                                 leaguesById
                         );
@@ -176,6 +199,8 @@ public class UpcomingFixtureFeaturesService {
     private UpcomingFeatureResponse toResponse(
             Fixture fixture,
             Map<Long, PredictionFeature> featuresByFixtureId,
+            Map<Long, GoalProbability>
+                    goalProbabilitiesByFixtureId,
             Map<Long, Team> teamsById,
             Map<Long, League> leaguesById
     ) {
@@ -232,10 +257,16 @@ public class UpcomingFixtureFeaturesService {
                             + fixture.getId()
             );
         }
+        
+        GoalProbability goalProbability =
+                goalProbabilitiesByFixtureId.get(
+                        fixture.getId()
+                );
 
         Map<String, BigDecimal> features =
                 featureMapMapper.toMap(
-                        predictionFeature
+                        predictionFeature,
+                        goalProbability
                 );
 
         return new UpcomingFeatureResponse(

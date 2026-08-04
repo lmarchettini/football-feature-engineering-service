@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
+import com.footballai.engineering.service.entity.GoalProbability;
 import com.footballai.engineering.service.entity.PredictionFeature;
 
 
@@ -15,9 +16,10 @@ import com.footballai.engineering.service.entity.PredictionFeature;
 @Component
 public class FeatureMapMapper {
 
-    public Map<String, BigDecimal> toMap(
-            PredictionFeature feature
-    ) {
+	public Map<String, BigDecimal> toMap(
+	        PredictionFeature feature,
+	        GoalProbability goalProbability
+	) {
         Map<String, BigDecimal> result =
                 new LinkedHashMap<>();
 
@@ -421,6 +423,49 @@ public class FeatureMapMapper {
         put(result,
                 "away_attack_vs_home_defence",
                 feature.getAwayAttackVsHomeDefence());
+        
+        /*
+         * Dixon-Coles.
+         *
+         * Le feature vengono aggiunte solamente quando esiste
+         * una goal_probability per la fixture.
+         *
+         * Non utilizziamo zero come fallback perché zero
+         * rappresenterebbe un valore statistico reale e altererebbe
+         * la predizione del modello.
+         */
+        if (goalProbability != null) {
+
+            put(
+                    result,
+                    "dc_expected_home_goals",
+                    goalProbability.getExpectedHomeGoals()
+            );
+
+            put(
+                    result,
+                    "dc_expected_away_goals",
+                    goalProbability.getExpectedAwayGoals()
+            );
+
+            put(
+                    result,
+                    "dc_expected_total_goals",
+                    goalProbability.getExpectedTotalGoals()
+            );
+
+            put(
+                    result,
+                    "dc_home_scored_probability",
+                    goalProbability.getHomeScoredProbability()
+            );
+
+            put(
+                    result,
+                    "dc_away_scored_probability",
+                    goalProbability.getAwayScoredProbability()
+            );
+        }
 
         return Map.copyOf(result);
     }
