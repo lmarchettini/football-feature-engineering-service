@@ -3,6 +3,8 @@ package com.footballai.engineering.service.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -34,48 +36,218 @@ public class FeatureEngineeringService {
 	private final FixtureStatisticRepository fixtureStatisticRepository;
 	private final FeatureEngineeringProperties properties;
 
+	public record FeatureEngineeringResult(int settled, int trainingGenerated, int upcomingGenerated, int failed,
+			List<String> errors) {
+	}
+
+	private record OperationResult(int processed, int failed, List<String> errors) {
+	}
+
 	@Transactional
 	public void generateFeatures() {
-		generateTrainingFeatures();
-		generateUpcomingFeatures();
+
+		generateFeatures(true, true, true, properties.getBatchSize(), properties.getUpcomingDays());
 	}
 
-	private void generateTrainingFeatures() {
-		List<Fixture> fixtures = fixtureRepository
-				.findFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
+	private OperationResult generateTrainingFeatures(int batchSize) {
+
+		List<Fixture> fixtures = fixtureRepository.findFixturesWithoutFeatures(PageRequest.of(0, batchSize));
 
 		if (fixtures.isEmpty()) {
+
 			log.debug("No trainable fixtures found");
-		} else {
-			log.info("Found {} trainable fixtures", fixtures.size());
+
+			return new OperationResult(0, 0, List.of());
 		}
+
+		log.info("Found {} trainable fixtures", fixtures.size());
+
+		int processed = 0;
+		int failed = 0;
+
+		List<String> errors = new ArrayList<>();
 
 		for (Fixture fixture : fixtures) {
-			if (predictionFeatureRepository.existsById(fixture.getId())) {
-				continue;
-			}
 
-			predictionFeatureRepository.save(buildTrainingFeature(fixture));
+			try {
+
+				/*
+				 * Protezione già presente nel vecchio flusso, mantenuta per compatibilità.
+				 */
+				if (predictionFeatureRepository.existsById(fixture.getId())) {
+					continue;
+				}
+
+				predictionFeatureRepository.save(buildTrainingFeature(fixture));
+
+				processed++;
+
+			} catch (Exception exception) {
+
+				failed++;
+
+				errors.add("TRAINING fixtureId=" + fixture.getId() + ": " + resolveMessage(exception));
+
+				log.error("Failed to generate training feature fixtureId={}", fixture.getId(), exception);
+			}
 		}
+
+		return new OperationResult(processed, failed, List.copyOf(errors));
 	}
 
-	private void generateUpcomingFeatures() {
-		List<Fixture> fixtures = fixtureRepository
-				.findUpcomingFixturesWithoutFeatures(PageRequest.of(0, properties.getBatchSize()));
+	@Transactional
+	public FeatureEngineeringResult generateFeatures(boolean settleUpcoming, boolean generateTraining,
+			boolean generateUpcoming, Integer requestedBatchSize, Integer requestedUpcomingDays) {
+
+		int batchSize = requestedBatchSize != null ? requestedBatchSize : properties.getBatchSize();
+
+		int upcomingDays = requestedUpcomingDays != null ? requestedUpcomingDays : properties.getUpcomingDays();
+
+		int settled = 0;
+		int trainingGenerated = 0;
+		int upcomingGenerated = 0;
+		int failed = 0;
+
+		List<String> errors = new ArrayList<>();
+
+		if (settleUpcoming) {
+
+			OperationResult result = settleUpcomingFeatures(batchSize);
+
+			settled += result.processed();
+			failed += result.failed();
+			errors.addAll(result.errors());
+		}
+
+		if (generateTraining) {
+
+			OperationResult result = generateTrainingFeatures(batchSize);
+
+			trainingGenerated += result.processed();
+
+			failed += result.failed();
+			errors.addAll(result.errors());
+		}
+
+		if (generateUpcoming) {
+
+			OperationResult result = generateUpcomingFeatures(batchSize, upcomingDays);
+
+			upcomingGenerated += result.processed();
+
+			failed += result.failed();
+			errors.addAll(result.errors());
+		}
+
+		return new FeatureEngineeringResult(settled, trainingGenerated, upcomingGenerated, failed, List.copyOf(errors));
+	}
+
+	private OperationResult generateUpcomingFeatures(int batchSize, int upcomingDays) {
+
+		LocalDateTime fromDate = LocalDateTime.now();
+
+		LocalDateTime toDate = fromDate.plusDays(upcomingDays);
+
+		List<Fixture> fixtures = fixtureRepository.findUpcomingFixtures(fromDate, toDate, PageRequest.of(0, batchSize));
 
 		if (fixtures.isEmpty()) {
-			log.debug("No upcoming fixtures found");
-		} else {
-			log.info("Found {} upcoming fixtures", fixtures.size());
+
+			log.debug("No upcoming fixtures found between {} and {}", fromDate, toDate);
+
+			return new OperationResult(0, 0, List.of());
 		}
+
+		log.info("Found {} upcoming fixtures between {} and {}", fixtures.size(), fromDate, toDate);
+
+		int processed = 0;
+		int failed = 0;
+
+		List<String> errors = new ArrayList<>();
 
 		for (Fixture fixture : fixtures) {
-			if (predictionFeatureRepository.existsById(fixture.getId())) {
-				continue;
-			}
 
-			predictionFeatureRepository.save(buildUpcomingFeature(fixture));
+			try {
+
+				predictionFeatureRepository.save(buildUpcomingFeature(fixture));
+
+				processed++;
+
+			} catch (Exception exception) {
+
+				failed++;
+
+				errors.add("UPCOMING fixtureId=" + fixture.getId() + ": " + resolveMessage(exception));
+
+				log.error("Failed to generate upcoming feature fixtureId={}", fixture.getId(), exception);
+			}
 		}
+
+		return new OperationResult(processed, failed, List.copyOf(errors));
+	}
+
+	private OperationResult settleUpcomingFeatures(int batchSize) {
+
+		List<Fixture> fixtures = fixtureRepository
+				.findSettledFixturesWithUpcomingFeatures(PageRequest.of(0, batchSize));
+
+		if (fixtures.isEmpty()) {
+
+			log.debug("No upcoming features to settle");
+
+			return new OperationResult(0, 0, List.of());
+		}
+
+		log.info("Found {} upcoming features to settle", fixtures.size());
+
+		int processed = 0;
+		int failed = 0;
+
+		List<String> errors = new ArrayList<>();
+
+		for (Fixture fixture : fixtures) {
+
+			try {
+
+				PredictionFeature feature = predictionFeatureRepository.findById(fixture.getId()).orElseThrow(
+						() -> new IllegalStateException("PredictionFeature not found for fixture " + fixture.getId()));
+
+				applyTargets(feature, fixture);
+
+				predictionFeatureRepository.save(feature);
+
+				processed++;
+
+			} catch (Exception exception) {
+
+				failed++;
+
+				errors.add("SETTLEMENT fixtureId=" + fixture.getId() + ": " + resolveMessage(exception));
+
+				log.error("Failed to settle upcoming feature fixtureId={}", fixture.getId(), exception);
+			}
+		}
+
+		return new OperationResult(processed, failed, List.copyOf(errors));
+	}
+
+	private void applyTargets(PredictionFeature feature, Fixture fixture) {
+		int homeGoals = fixture.getHomeGoals();
+		int awayGoals = fixture.getAwayGoals();
+		int totalGoals = homeGoals + awayGoals;
+
+		feature.setTargetGoal(totalGoals > 0);
+		feature.setTargetOver15(totalGoals > 1);
+		feature.setTargetOver25(totalGoals > 2);
+		feature.setTargetUnder45(totalGoals < 5);
+		feature.setTargetBtts(homeGoals > 0 && awayGoals > 0);
+		feature.setTargetHomeWin(homeGoals > awayGoals);
+		feature.setTargetHomeScored(homeGoals > 0);
+		feature.setTargetAwayScored(awayGoals > 0);
+		feature.setTargetDoubleChance1x(homeGoals >= awayGoals);
+		feature.setTargetDoubleChanceX2(awayGoals >= homeGoals);
+		feature.setTargetDoubleChance12(homeGoals != awayGoals);
+
+		feature.setIsTrainable(true);
 	}
 
 	private PredictionFeature buildTrainingFeature(Fixture fixture) {
@@ -89,13 +261,8 @@ public class FeatureEngineeringService {
 		TeamStats homeHomeStats = calculateHomeTeamStats(fixture.getHomeTeamId(), fixture, 5);
 		TeamStats awayAwayStats = calculateAwayTeamStats(fixture.getAwayTeamId(), fixture, 5);
 
-		BttsInteractionFeatures bttsInteractionFeatures = calculateBttsInteractionFeatures(
-				homeStats5, 
-				awayStats5,
-				homeStats10, 
-				awayStats10, 
-				homeHomeStats, 
-				awayAwayStats);
+		BttsInteractionFeatures bttsInteractionFeatures = calculateBttsInteractionFeatures(homeStats5, awayStats5,
+				homeStats10, awayStats10, homeHomeStats, awayAwayStats);
 
 		BigDecimal combinedAvgXg = calculateCombinedAvgXg(homeStats5, awayStats5);
 
@@ -192,14 +359,10 @@ public class FeatureEngineeringService {
 				.expectedHomeGoals(average(homeHomeStats.avgXg(), awayAwayStats.avgXga()))
 
 				.expectedAwayGoals(average(awayAwayStats.avgXg(), homeHomeStats.avgXga()))
-				
-				.estimatedHomeGoals(
-						bttsInteractionFeatures.estimatedHomeGoals()
-				)
 
-				.estimatedAwayGoals(
-						bttsInteractionFeatures.estimatedAwayGoals()
-				)
+				.estimatedHomeGoals(bttsInteractionFeatures.estimatedHomeGoals())
+
+				.estimatedAwayGoals(bttsInteractionFeatures.estimatedAwayGoals())
 
 				.minExpectedGoals(bttsInteractionFeatures.minExpectedGoals())
 
@@ -256,9 +419,8 @@ public class FeatureEngineeringService {
 				.targetBtts(homeGoals > 0 && awayGoals > 0)
 
 				.targetHomeWin(homeGoals > awayGoals)
-				
-				.targetHomeScored(homeGoals > 0)
-				.targetAwayScored(awayGoals > 0)
+
+				.targetHomeScored(homeGoals > 0).targetAwayScored(awayGoals > 0)
 
 				.targetDoubleChance1x(homeGoals >= awayGoals)
 
@@ -383,14 +545,10 @@ public class FeatureEngineeringService {
 				.expectedHomeGoals(average(homeHomeStats.avgXg(), awayAwayStats.avgXga()))
 
 				.expectedAwayGoals(average(awayAwayStats.avgXg(), homeHomeStats.avgXga()))
-				
-				.estimatedHomeGoals(
-						bttsInteractionFeatures.estimatedHomeGoals()
-				)
 
-				.estimatedAwayGoals(
-						bttsInteractionFeatures.estimatedAwayGoals()
-				)
+				.estimatedHomeGoals(bttsInteractionFeatures.estimatedHomeGoals())
+
+				.estimatedAwayGoals(bttsInteractionFeatures.estimatedAwayGoals())
 
 				.minExpectedGoals(bttsInteractionFeatures.minExpectedGoals())
 
@@ -427,9 +585,8 @@ public class FeatureEngineeringService {
 				.oddsHome(null).oddsDraw(null).oddsAway(null)
 
 				.targetGoal(null).targetOver15(null).targetOver25(null).targetUnder45(null).targetBtts(null)
-				.targetHomeScored(null)
-				.targetAwayScored(null)
-				.targetHomeWin(null).targetDoubleChance1x(null).targetDoubleChanceX2(null).targetDoubleChance12(null)
+				.targetHomeScored(null).targetAwayScored(null).targetHomeWin(null).targetDoubleChance1x(null)
+				.targetDoubleChanceX2(null).targetDoubleChance12(null)
 
 				.isTrainable(false).build();
 	}
@@ -599,11 +756,6 @@ public class FeatureEngineeringService {
 			long calculatedRestDays = Duration.between(lastMatch.getDate(), currentFixture.getDate()).toDays();
 
 			restDays = (int) Math.max(0, Math.min(calculatedRestDays, 30));
-		}
-
-		if (lastMatch.getDate() != null && currentFixture.getDate() != null) {
-
-			restDays = (int) Duration.between(lastMatch.getDate(), currentFixture.getDate()).toDays();
 		}
 
 		int matches = previousMatches.size();
@@ -813,59 +965,25 @@ public class FeatureEngineeringService {
 
 		return average(averageGoalsScored, opponentAverageGoalsConceded);
 	}
-	
+
 	private boolean isPositive(BigDecimal value) {
-	    return value != null
-	            && value.compareTo(BigDecimal.ZERO) > 0;
-	}
-	
-	private BigDecimal minimum(
-	        BigDecimal first,
-	        BigDecimal second
-	) {
-	    return safeDecimal(first)
-	            .min(safeDecimal(second))
-	            .setScale(
-	                    4,
-	                    RoundingMode.HALF_UP
-	            );
+		return value != null && value.compareTo(BigDecimal.ZERO) > 0;
 	}
 
-	private BigDecimal maximum(
-	        BigDecimal first,
-	        BigDecimal second
-	) {
-	    return safeDecimal(first)
-	            .max(safeDecimal(second))
-	            .setScale(
-	                    4,
-	                    RoundingMode.HALF_UP
-	            );
+	private BigDecimal minimum(BigDecimal first, BigDecimal second) {
+		return safeDecimal(first).min(safeDecimal(second)).setScale(4, RoundingMode.HALF_UP);
 	}
 
-	private BigDecimal absoluteDifference(
-	        BigDecimal first,
-	        BigDecimal second
-	) {
-	    return safeDecimal(first)
-	            .subtract(safeDecimal(second))
-	            .abs()
-	            .setScale(
-	                    4,
-	                    RoundingMode.HALF_UP
-	            );
+	private BigDecimal maximum(BigDecimal first, BigDecimal second) {
+		return safeDecimal(first).max(safeDecimal(second)).setScale(4, RoundingMode.HALF_UP);
 	}
 
-	private BigDecimal multiply(
-	        BigDecimal first,
-	        BigDecimal second
-	) {
-	    return safeDecimal(first)
-	            .multiply(safeDecimal(second))
-	            .setScale(
-	                    4,
-	                    RoundingMode.HALF_UP
-	            );
+	private BigDecimal absoluteDifference(BigDecimal first, BigDecimal second) {
+		return safeDecimal(first).subtract(safeDecimal(second)).abs().setScale(4, RoundingMode.HALF_UP);
+	}
+
+	private BigDecimal multiply(BigDecimal first, BigDecimal second) {
+		return safeDecimal(first).multiply(safeDecimal(second)).setScale(4, RoundingMode.HALF_UP);
 	}
 
 	private record BttsInteractionFeatures(BigDecimal estimatedHomeGoals, BigDecimal estimatedAwayGoals,
@@ -873,5 +991,17 @@ public class FeatureEngineeringService {
 			BigDecimal expectedGoalsProduct, BigDecimal minScoredRate5, BigDecimal minScoredRate10,
 			BigDecimal scoredRateProduct10, BigDecimal minConcededRate5, BigDecimal minConcededRate10,
 			BigDecimal concededRateProduct10, BigDecimal homeAttackVsAwayDefence, BigDecimal awayAttackVsHomeDefence) {
+	}
+
+	private String resolveMessage(Exception exception) {
+
+		String message = exception.getMessage();
+
+		if (message == null || message.isBlank()) {
+
+			return exception.getClass().getSimpleName();
+		}
+
+		return message;
 	}
 }

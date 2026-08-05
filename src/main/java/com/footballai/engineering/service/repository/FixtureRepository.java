@@ -11,6 +11,39 @@ import org.springframework.data.repository.query.Param;
 import com.footballai.engineering.service.entity.Fixture;
 
 public interface FixtureRepository extends JpaRepository<Fixture, Long> {
+	
+	
+	@Query("""
+		    SELECT f
+		    FROM Fixture f
+		    WHERE f.date >= :fromDate
+		      AND f.date < :toDate
+		      AND f.status NOT IN ('FT', 'AET', 'PEN', 'AWD', 'CANC')
+		    ORDER BY f.date ASC
+		""")
+		List<Fixture> findUpcomingFixtures(
+		        @Param("fromDate") LocalDateTime fromDate,
+		        @Param("toDate") LocalDateTime toDate,
+		        Pageable pageable
+		);
+	
+	@Query("""
+		    SELECT f
+		    FROM Fixture f
+		    WHERE f.status IN ('FT', 'AET', 'PEN', 'AWD')
+		      AND f.homeGoals IS NOT NULL
+		      AND f.awayGoals IS NOT NULL
+		      AND EXISTS (
+		          SELECT 1
+		          FROM PredictionFeature pf
+		          WHERE pf.fixtureId = f.id
+		            AND pf.isTrainable = false
+		      )
+		    ORDER BY f.date ASC
+		""")
+		List<Fixture> findSettledFixturesWithUpcomingFeatures(
+		        Pageable pageable
+		);
 
 	@Query("""
 		    SELECT f
@@ -31,7 +64,9 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
 	@Query("""
 		    SELECT f
 		    FROM Fixture f
-		    WHERE f.status NOT IN ('FT', 'AET', 'PEN', 'AWD', 'CANC')
+		    WHERE f.date >= :fromDate
+		      AND f.date < :toDate
+		      AND f.status NOT IN ('FT', 'AET', 'PEN', 'AWD', 'CANC')
 		      AND NOT EXISTS (
 		          SELECT 1
 		          FROM PredictionFeature pf
@@ -40,6 +75,8 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long> {
 		    ORDER BY f.date ASC
 		""")
 		List<Fixture> findUpcomingFixturesWithoutFeatures(
+		        @Param("fromDate") LocalDateTime fromDate,
+		        @Param("toDate") LocalDateTime toDate,
 		        Pageable pageable
 		);
 

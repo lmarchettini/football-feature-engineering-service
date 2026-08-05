@@ -15,5 +15,7 @@ public class FeatureEngineeringProperties {
     private int lookbackMatches;
 
     private int batchSize;
+    
+    private int upcomingDays;
 
 }
