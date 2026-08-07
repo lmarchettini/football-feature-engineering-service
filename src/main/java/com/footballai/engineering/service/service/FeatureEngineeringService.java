@@ -22,6 +22,7 @@ import com.footballai.engineering.service.repository.FixtureRepository;
 import com.footballai.engineering.service.repository.FixtureStatisticRepository;
 import com.footballai.engineering.service.repository.PredictionFeatureRepository;
 
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +36,7 @@ public class FeatureEngineeringService {
 	private final PredictionFeatureRepository predictionFeatureRepository;
 	private final FixtureStatisticRepository fixtureStatisticRepository;
 	private final FeatureEngineeringProperties properties;
+	private final EntityManager entityManager;
 
 	public record FeatureEngineeringResult(int settled, int trainingGenerated, int upcomingGenerated, int failed,
 			List<String> errors) {
@@ -51,44 +53,103 @@ public class FeatureEngineeringService {
 
 	private OperationResult generateTrainingFeatures(int batchSize) {
 
-		List<Fixture> fixtures = fixtureRepository.findFixturesWithoutFeatures(PageRequest.of(0, batchSize));
-
-		if (fixtures.isEmpty()) {
-
-			log.debug("No trainable fixtures found");
-
-			return new OperationResult(0, 0, List.of());
-		}
-
-		log.info("Found {} trainable fixtures", fixtures.size());
-
 		int processed = 0;
 		int failed = 0;
+		int batchNumber = 0;
 
 		List<String> errors = new ArrayList<>();
 
-		for (Fixture fixture : fixtures) {
+		while (true) {
 
-			try {
+			List<Fixture> fixtures = fixtureRepository.findFixturesWithoutFeatures(PageRequest.of(0, batchSize));
 
-				/*
-				 * Protezione già presente nel vecchio flusso, mantenuta per compatibilità.
-				 */
-				if (predictionFeatureRepository.existsById(fixture.getId())) {
-					continue;
+			if (fixtures.isEmpty()) {
+
+				if (processed == 0) {
+					log.debug("No trainable fixtures found");
+				} else {
+					log.info("Training feature generation completed: processed={}, failed={}, batches={}", processed,
+							failed, batchNumber);
 				}
 
-				predictionFeatureRepository.save(buildTrainingFeature(fixture));
+				break;
+			}
 
-				processed++;
+			batchNumber++;
 
-			} catch (Exception exception) {
+			log.info("Training feature batch {}: found {} fixtures", batchNumber, fixtures.size());
 
-				failed++;
+			int batchProcessed = 0;
+			int batchFailed = 0;
 
-				errors.add("TRAINING fixtureId=" + fixture.getId() + ": " + resolveMessage(exception));
+			for (Fixture fixture : fixtures) {
 
-				log.error("Failed to generate training feature fixtureId={}", fixture.getId(), exception);
+				try {
+
+					/*
+					 * Protezione mantenuta per compatibilità.
+					 *
+					 * In teoria la query findFixturesWithoutFeatures() restituisce già soltanto
+					 * fixture prive di feature.
+					 */
+					if (predictionFeatureRepository.existsById(fixture.getId())) {
+						continue;
+					}
+
+					PredictionFeature feature = buildTrainingFeature(fixture);
+
+					predictionFeatureRepository.save(feature);
+
+					processed++;
+					batchProcessed++;
+
+				} catch (Exception exception) {
+
+					failed++;
+					batchFailed++;
+
+					String error = "TRAINING fixtureId=" + fixture.getId() + ": " + resolveMessage(exception);
+
+					errors.add(error);
+
+					log.error("Failed to generate training feature fixtureId={}", fixture.getId(), exception);
+				}
+			}
+
+			/*
+			 * Importantissimo: forza gli INSERT prima della query del batch successivo.
+			 *
+			 * In questo modo findFixturesWithoutFeatures() non recupererà nuovamente le
+			 * fixture appena elaborate.
+			 */
+			predictionFeatureRepository.flush();
+
+			/*
+			 * Evita che migliaia di entity rimangano nel persistence context durante una
+			 * rigenerazione completa da 20k+ fixture.
+			 */
+			entityManager.clear();
+
+			log.info("Training feature batch {} completed: processed={}, failed={}, totalProcessed={}", batchNumber,
+					batchProcessed, batchFailed, processed);
+
+			/*
+			 * Se l'ultimo batch contiene meno elementi del batchSize, teoricamente potremmo
+			 * uscire subito.
+			 *
+			 * NON lo facciamo perché potrebbero esserci stati errori: la query successiva
+			 * ci permette di sapere con certezza se esistono ancora fixture senza feature.
+			 */
+			
+			if (batchProcessed == 0) {
+
+			    log.error(
+			            "Training feature generation stopped because batch {} produced 0 features. "
+			                    + "Remaining fixtures would cause an infinite retry loop.",
+			            batchNumber
+			    );
+
+			    break;
 			}
 		}
 
@@ -798,9 +859,9 @@ public class FeatureEngineeringService {
 				 * Gli xG vengono mediati soltanto sulle partite dove il dato è realmente
 				 * disponibile.
 				 */
-				divideDecimal(xgTotal, xgMatches),
+				divideNullableDecimal(xgTotal, xgMatches),
 
-				divideDecimal(xgaTotal, xgaMatches),
+				divideNullableDecimal(xgaTotal, xgaMatches),
 
 				divide(bttsMatches, matches),
 
@@ -824,8 +885,8 @@ public class FeatureEngineeringService {
 				bd(0), // avgPassAccuracy
 				bd(0), // avgCorners
 				bd(0), // avgShotsInsideBox
-				bd(0), // avgXg
-				bd(0), // avgXga
+				null, // avgXg
+				null, // avgXga
 				bd(0), // bttsRate
 				bd(0) // over25Rate
 		);
@@ -889,22 +950,43 @@ public class FeatureEngineeringService {
 	}
 
 	private BigDecimal calculateCombinedAvgXg(TeamStats homeStats, TeamStats awayStats) {
+		BigDecimal homeXg = homeStats.avgXg();
 
-		return safeDecimal(homeStats.avgXg()).add(safeDecimal(awayStats.avgXg())).setScale(4, RoundingMode.HALF_UP);
+		BigDecimal awayXg = awayStats.avgXg();
+
+		if (homeXg == null || awayXg == null) {
+			return null;
+		}
+
+		return homeXg.add(awayXg).setScale(4, RoundingMode.HALF_UP);
 	}
 
 	private BigDecimal calculateExpectedMatchGoals(TeamStats homeStats, TeamStats awayStats) {
-
 		BigDecimal expectedHomeGoals = average(homeStats.avgXg(), awayStats.avgXga());
 
 		BigDecimal expectedAwayGoals = average(awayStats.avgXg(), homeStats.avgXga());
+
+		if (expectedHomeGoals == null || expectedAwayGoals == null) {
+			return null;
+		}
 
 		return expectedHomeGoals.add(expectedAwayGoals).setScale(4, RoundingMode.HALF_UP);
 	}
 
 	private BigDecimal average(BigDecimal first, BigDecimal second) {
+		if (first == null && second == null) {
+			return null;
+		}
 
-		return safeDecimal(first).add(safeDecimal(second)).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
+		if (first == null) {
+			return second.setScale(4, RoundingMode.HALF_UP);
+		}
+
+		if (second == null) {
+			return first.setScale(4, RoundingMode.HALF_UP);
+		}
+
+		return first.add(second).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
 	}
 
 	private BigDecimal calculateDifference(BigDecimal homeValue, BigDecimal awayValue) {
@@ -1003,5 +1085,13 @@ public class FeatureEngineeringService {
 		}
 
 		return message;
+	}
+
+	private BigDecimal divideNullableDecimal(BigDecimal value, int divisor) {
+		if (divisor == 0) {
+			return null;
+		}
+
+		return value.divide(BigDecimal.valueOf(divisor), 4, RoundingMode.HALF_UP);
 	}
 }
